@@ -1,0 +1,10 @@
+{
+  "namespace": "com.dat.shared.order",
+  "type": "record",
+  "name": "OrderResponse",
+  "fields": [
+    { "name": "orderId", "type": "string" },
+    { "name": "userId", "type": "string" },
+    { "name": "totalPrice", "type": "double" }
+  ]
+}
