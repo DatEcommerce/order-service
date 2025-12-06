@@ -12,15 +12,14 @@ import org.hibernate.annotations.UuidGenerator;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Entity(name = "outbox")
+@Entity(name = "outbox_order")
 public class OutBoxEvent {
     @Id
     @UuidGenerator
     private String id;
 
     private String orderId;
-    private String paymentId;
+    private String orderStatus;
     private String productId;
-    private String paymentStatus;
-    private Integer quantity;
+    private Integer productQuantity;
 }
