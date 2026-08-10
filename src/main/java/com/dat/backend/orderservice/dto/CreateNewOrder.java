@@ -15,4 +15,5 @@ public class CreateNewOrder {
     private String productName;
     private Double productPrice;
     private Integer productQuantity;
+    private String bankingMethod;
 }

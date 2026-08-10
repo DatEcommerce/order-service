@@ -20,7 +20,7 @@ public class SecurityFilter {
     private String clientId;
 
     private final String[] PUBLIC_URLS = {
-            "api/v1/orders/test",
+            "/api/v1/orders/test",
             "/api/v1/orders/**",
     };
 

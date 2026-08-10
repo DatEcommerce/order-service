@@ -30,6 +30,6 @@ public class Order {
     private Integer productQuantity;
     private Double totalPrice;
 
-    private String paymentUrl;
     private String paymentId;
+    private String paymentUrl;
 }

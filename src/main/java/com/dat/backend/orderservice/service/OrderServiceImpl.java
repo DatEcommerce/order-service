@@ -6,12 +6,15 @@ package com.dat.backend.orderservice.service;
 import com.dat.backend.orderservice.dto.CreateNewOrder;
 import com.dat.backend.orderservice.dto.CreatePayment;
 import com.dat.backend.orderservice.dto.OrderResponse;
+import com.dat.backend.orderservice.dto.PaymentResponse;
 import com.dat.backend.orderservice.entity.Order;
 import com.dat.backend.orderservice.entity.OrderStatus;
-import com.dat.backend.orderservice.entity.OutBoxEvent;
+import com.dat.backend.orderservice.entity.OutboxOrder;
 import com.dat.backend.orderservice.mapper.OrderMapper;
 import com.dat.backend.orderservice.repository.OrderRepository;
-import com.dat.backend.orderservice.repository.OutBoxEventRepository;
+import com.dat.backend.orderservice.repository.OutboxOrderRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -29,19 +32,19 @@ public class OrderServiceImpl {
     private final OrderMapper orderMapper;
     private final OrderRepository orderRepository;
     private final PaymentService paymentService;
-    private final OutBoxEventRepository outBoxEventRepository;
+    private final OutboxOrderRepository outboxOrderRepository;
 
     public OrderServiceImpl(@Qualifier("txKafkaTemplate") KafkaTemplate<String, Object> kafkaTemplate,
                             OrderMapper orderMapper,
                             OrderRepository orderRepository,
                             PaymentService paymentService,
-                            OutBoxEventRepository outBoxEventRepository) {
+                            OutboxOrderRepository outboxOrderRepository) {
         //this.userService = userService;
         this.kafkaTemplate = kafkaTemplate;
         this.orderMapper = orderMapper;
         this.orderRepository = orderRepository;
         this.paymentService = paymentService;
-        this.outBoxEventRepository = outBoxEventRepository;
+        this.outboxOrderRepository = outboxOrderRepository;
     }
 
     @Transactional("kafkaTransactionManager")
@@ -82,33 +85,56 @@ public class OrderServiceImpl {
             order.setOrderStatus(OrderStatus.IN_PROGRESS);
             orderRepository.save(order);
         } else {
+            String bankingMethod = newOrder.getBankingMethod();
             order.setOrderStatus(OrderStatus.WAITING_BANKING);
-            // Send event to payment service
-//            com.dat.shared.order.OrderResponse orderResponse = new com.dat.shared.order.OrderResponse();
-//            orderResponse.setOrderId(order.getId());
-//            orderResponse.setUserId(id);
-//            orderResponse.setTotalPrice(order.getTotalPrice());
-//
-//            String key = "order-" + order.getId();
-//
-//            ProducerRecord<String, Object> producerRecord = new ProducerRecord<>("payment-topic", key, orderResponse);
-//            kafkaTemplate.send(producerRecord);
+            // Call payment-service for creating payment entity
             CreatePayment createPayment = new CreatePayment();
             createPayment.setOrderId(order.getId());
             createPayment.setTotalPrice(order.getTotalPrice());
-            String paymentUrl = paymentService.createPayment(createPayment);
-            log.info("Payment URL received: {}", paymentUrl);
-            order.setPaymentUrl(paymentUrl);
+            PaymentResponse payment = paymentService.createPayment(createPayment);
+            order.setPaymentUrl(payment.getPaymentUrl());
+            order.setPaymentId(payment.getPaymentId());
             orderRepository.save(order);
 
             // Send data to outbox
-            OutBoxEvent event = new OutBoxEvent();
+            OutboxOrder event = new OutboxOrder();
             event.setOrderId(order.getId());
-            event.setProductId(newOrder.getProductId());
-            event.setQuantity(newOrder.getProductQuantity());
-            event.setPaymentStatus(paymentMethod);
-            outBoxEventRepository.save(event);
+            event.setOrderStatus(order.getOrderStatus().toString());
+            event.setProductId(order.getProductId());
+            event.setProductQuantity(order.getProductQuantity());
+
+            outboxOrderRepository.save(event);
         }
         return orderMapper.orderToOrderResponse(order);
+    }
+
+    @KafkaListener(id = "Listener-payment-status-update",
+            topics = "outbox.db_payment.outbox_payment")
+    public void updatePaymentStatus(ConsumerRecord<String, Object> paymentEvent) {
+        try {
+            String response = paymentEvent.value().toString();
+            System.out.println(response);
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(response);
+            String orderId = node.path("after").path("orderId").asText();
+            String paymentId = node.path("after").path("paymentId").asText();
+            String paymentStatus = node.path("after").path("paymentStatus").asText();
+            Order order = orderRepository.findById(orderId).orElseThrow(() -> new RuntimeException("Order not found"));
+            if ("FAILED".equalsIgnoreCase(paymentStatus)) {
+                order.setOrderStatus(OrderStatus.CANCELLED);
+            }
+            if ("SUCCESS".equalsIgnoreCase(paymentStatus)) {
+                order.setOrderStatus(OrderStatus.COMPLETED);
+            }
+            orderRepository.save(order);
+
+            // update outbox order
+            OutboxOrder outboxOrder = outboxOrderRepository.findById(orderId).orElseThrow(() -> new RuntimeException("Order not found"));
+            outboxOrder.setOrderStatus(order.getOrderStatus().toString());
+            outboxOrderRepository.save(outboxOrder);
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e.getMessage());
+        }
     }
 }

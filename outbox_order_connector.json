@@ -1,0 +1,22 @@
+{
+  "name": "outbox_order",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "tasks.max": "1",
+    "database.hostname": "user_db",
+    "database.port": "3306",
+    "database.user": "db_user",
+    "database.password": "password",
+    "database.server.id": "1001",
+    "topic.prefix": "outbox",
+    "database.include.list": "db_order",
+    "table.include.list": "db_order.outbox_order",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka1:29092",
+    "schema.history.internal.kafka.topic": "schema-changes.outbox_order_tracking",
+    "include.schema.changes": "true",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false"
+  }
+}

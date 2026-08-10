@@ -45,4 +45,12 @@ public class KafkaMetricsConfig {
                 .register(registry)
                 .increment();
     }
+
+    public void incrementKickOutConsumer(String containerName) {
+        Counter.builder("kick-out-consumers.count")
+                .description("Number of Kafka consumer kicked out")
+                .tag("container-name", containerName)
+                .register(registry)
+                .increment();
+    }
 }

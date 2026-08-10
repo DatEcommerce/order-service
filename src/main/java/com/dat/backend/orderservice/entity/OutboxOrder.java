@@ -13,7 +13,7 @@ import org.hibernate.annotations.UuidGenerator;
 @AllArgsConstructor
 @Builder
 @Entity(name = "outbox_order")
-public class OutBoxEvent {
+public class OutboxOrder {
     @Id
     @UuidGenerator
     private String id;
